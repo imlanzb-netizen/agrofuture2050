@@ -39,3 +39,23 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+reminder-cron.log
+reminder-test-*.json
+
+# development backups
+*.bak
+*.bak*
+*.backup
+*.backup.*
+*.before-*
+
+# AgroFuture development backups
+app/**/*.bak*
+app/**/*.backup*
+app/**/*.before-*
+app/**/*.broken
+app/**/*.delete-backup
+
+# Additional backup files
+*-backup*
