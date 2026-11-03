@@ -27,12 +27,25 @@ type ArticleItem = {
   file_name: string | null;
 };
 
+type ListingItem = {
+  id: string;
+  type: "crop" | "livestock" | "seller-product";
+  title: string;
+  status: string;
+  created_at: string;
+  image_url?: string | null;
+  [key: string]: unknown;
+};
+
 export default function AdminPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [articles, setArticles] = useState<ArticleItem[]>([]);
+  const [listings, setListings] = useState<ListingItem[]>([]);
+  const [listingsLoading, setListingsLoading] = useState(false);
+
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [savingId, setSavingId] = useState("");
@@ -88,6 +101,134 @@ export default function AdminPage() {
     }
 
     return data.session.access_token;
+  }
+
+  async function loadListings() {
+    setListingsLoading(true);
+    setError("");
+
+    try {
+      const token = await getAccessToken();
+
+      if (!token) {
+        router.replace("/auth");
+        return;
+      }
+
+      const response = await fetch("/api/admin/listings", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Imeshindikana kupata matangazo.");
+      }
+
+      setListings(result.listings || []);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Hitilafu ya kupakia matangazo."
+      );
+    } finally {
+      setListingsLoading(false);
+    }
+  }
+
+  async function deleteListing(listing: ListingItem) {
+    const confirmed = window.confirm(
+      `Una uhakika unataka kufuta tangazo "${listing.title}" kabisa?`
+    );
+
+    if (!confirmed) return;
+
+    setError("");
+    setMessage("");
+    setSavingId(listing.id);
+
+    try {
+      const token = await getAccessToken();
+
+      if (!token) {
+        router.replace("/auth");
+        return;
+      }
+
+      const response = await fetch("/api/admin/listings", {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: listing.id,
+          type: listing.type,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Imeshindikana kufuta tangazo.");
+      }
+
+      setMessage(
+        result.warning
+          ? `Tangazo limefutwa. ${result.warning}`
+          : "Tangazo na picha yake vimefutwa."
+      );
+
+      await loadListings();
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Hitilafu wakati wa kufuta tangazo."
+      );
+    } finally {
+      setSavingId("");
+    }
+  }
+
+  async function updateListingStatus(listing: ListingItem) {
+    setError("");
+    setMessage("");
+    setSavingId(listing.id);
+
+    try {
+      const token = await getAccessToken();
+
+      if (!token) {
+        router.replace("/auth");
+        return;
+      }
+
+      const status = listing.status === "active" ? "paused" : "active";
+
+      const response = await fetch("/api/admin/listings", {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: listing.id,
+          type: listing.type,
+          status,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "Imeshindikana kubadilisha hali.");
+      }
+
+      setMessage(status === "paused" ? "Tangazo limesimamishwa." : "Tangazo limewezeshwa tena.");
+      await loadListings();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Hitilafu ya kubadilisha hali.");
+    } finally {
+      setSavingId("");
+    }
   }
 
   async function checkAdmin() {
@@ -656,6 +797,7 @@ export default function AdminPage() {
             ["overview", "🏠", "Overview"],
             ["users", "👥", "Users"],
             ["content", "📚", "Content"],
+            ["listings", "🛒", "Marketplace"],
             ["intelligence", "📊", "Intelligence"],
             ["reports", "📈", "Reports"],
             ["tanzania", "🇹🇿", "Tanzania"],
@@ -663,7 +805,10 @@ export default function AdminPage() {
           ].map(([id, icon, label]) => (
             <button
               key={id}
-              onClick={() => setActiveSection(id)}
+              onClick={() => {
+                setActiveSection(id);
+                if (id === "listings") void loadListings();
+              }}
               className={`shrink-0 rounded-2xl px-4 py-3 text-sm font-black transition ${
                 activeSection === id
                   ? "bg-[#2F9E5B] text-white shadow-sm"
@@ -686,6 +831,114 @@ export default function AdminPage() {
         {message && (
           <div className="mb-4 rounded-2xl border border-[#BFE3C9] bg-[#EAF7ED] p-4 text-sm font-bold text-[#2F9E5B]">
             ✓ {message}
+          </div>
+        )}
+
+        {activeSection === "listings" && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#2F9E5B]">
+                  MARKETPLACE MANAGEMENT
+                </p>
+                <h2 className="mt-1 text-2xl font-black">
+                  Matangazo ya Soko 🛒
+                </h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Angalia, simamisha, washa tena au futa matangazo.
+                </p>
+              </div>
+              <button
+                onClick={loadListings}
+                disabled={listingsLoading}
+                className="rounded-xl bg-[#2F9E5B] px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+              >
+                {listingsLoading ? "Inapakia..." : "↻ Refresh"}
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl bg-white p-4 ring-1 ring-[#DCE9DF]">
+                <p className="text-sm text-gray-500">Matangazo yote</p>
+                <p className="mt-1 text-2xl font-black">{listings.length}</p>
+              </div>
+              <div className="rounded-2xl bg-white p-4 ring-1 ring-[#DCE9DF]">
+                <p className="text-sm text-gray-500">Yanayoonekana</p>
+                <p className="mt-1 text-2xl font-black">
+                  {listings.filter((item) => item.status === "active").length}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-white p-4 ring-1 ring-[#DCE9DF]">
+                <p className="text-sm text-gray-500">Yaliyosimamishwa</p>
+                <p className="mt-1 text-2xl font-black">
+                  {listings.filter((item) => item.status === "paused").length}
+                </p>
+              </div>
+            </div>
+
+            {listingsLoading ? (
+              <div className="rounded-2xl bg-white p-8 text-center text-gray-500">
+                Inapakia matangazo...
+              </div>
+            ) : listings.length === 0 ? (
+              <div className="rounded-2xl bg-white p-8 text-center text-gray-500 ring-1 ring-[#DCE9DF]">
+                Hakuna matangazo yaliyopatikana.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {listings.map((listing) => (
+                  <div
+                    key={`${listing.type}-${listing.id}`}
+                    className="flex flex-col gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-[#DCE9DF] sm:flex-row sm:items-center"
+                  >
+                    {listing.image_url && (
+                      <img
+                        src={listing.image_url}
+                        alt={listing.title}
+                        className="h-20 w-20 rounded-xl object-cover"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-black">{listing.title || "Bila jina"}</h3>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {listing.type} • {new Date(listing.created_at).toLocaleDateString()}
+                      </p>
+                      <span className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                        listing.status === "active"
+                          ? "bg-green-100 text-green-700"
+                          : listing.status === "paused"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-gray-100 text-gray-700"
+                      }`}>
+                        {listing.status}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => updateListingStatus(listing)}
+                        disabled={savingId === listing.id || !["active", "paused"].includes(listing.status)}
+                        className="rounded-xl bg-[#EAF7ED] px-3 py-2 text-sm font-bold text-[#173B2A] disabled:opacity-40"
+                      >
+                        {savingId === listing.id
+                          ? "Inasubiri..."
+                          : listing.status === "active"
+                            ? "⏸ Simamisha"
+                            : listing.status === "paused"
+                              ? "▶ Washa tena"
+                              : "Hali maalum"}
+                      </button>
+                      <button
+                        onClick={() => deleteListing(listing)}
+                        disabled={savingId === listing.id}
+                        className="rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700 disabled:opacity-40"
+                      >
+                        🗑 Futa
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
