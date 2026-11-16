@@ -159,7 +159,7 @@ export default function AIPage() {
         </div>
 
 
-        <div className="rounded-[28px] border border-[#DCE9DF] bg-white p-3 shadow-md shadow-green-900/5">
+        <div className="relative z-10 rounded-[28px] border border-[#DCE9DF] bg-white p-3 shadow-md shadow-green-900/5">
           <input
             ref={cameraRef}
             type="file"
